@@ -63,3 +63,4 @@ def buildAdjacencyMatrix():
     """This function assembles the STRING and HuRI downloaded data into an adjacency matrix.
     See: https://github.com/Jpickard1/HardwiredGenome/blob/master/Code/data_handling/build/buildHWGobj.m
     """
+    pass
