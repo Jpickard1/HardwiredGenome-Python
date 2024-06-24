@@ -6,8 +6,9 @@ import shutil
 def load_data_path():
     filepath = os.path.dirname(os.path.abspath(__file__))
     # Go to base path of the repo and add Data/
-    data_path = os.path.join(filepath[:-10], "Data/")
+    data_path = os.path.join(filepath[:-4], "Data/")
     return data_path
+    
 ###This is another function I find in load_data_path.m. I feel like it might be used here(or maybe you want to put it somewhere else)
 def download_data():
     """This function should call the methods to download the STRING and HURI datasets.
@@ -48,7 +49,7 @@ def download_data():
 
     print("    STRING Downloaded")
 ##print("Current Working Directory:", os.getcwd())
-    pass
+
 
 ## after running download_data(), the data is downloaded outside of current local address.I mean, it is supposed to downloaded into D:/HardwiredGenome-Python/HWG,right? but now it is placed at D:/HardwiredGenome-(or it is what it is supposed to be, I am not familiar with how matlab code work, or it is just a problme caused by name?like how it deal with "-")
 def download_string():
@@ -70,7 +71,6 @@ def download_string():
                 shutil.copyfileobj(f_in, f_out)
 
     print("    STRING Downloaded")
-    pass
 
 
 def download_huri():
@@ -97,7 +97,6 @@ def download_huri():
         urllib.request.urlretrieve("http://www.interactome-atlas.org/data/HI-union.tsv", HI_union_file)
     
     print("    HuRI Downloaded")
-    pass
 
 
 def download_HGNC():
@@ -115,7 +114,6 @@ def download_HGNC():
         urllib.request.urlretrieve('http://ftp.ebi.ac.uk/pub/databases/genenames/hgnc/tsv/hgnc_complete_set.txt', HGNC_file)
 
     print("    HGNC Downloaded")
-    pass
 
 
 def download_HumanTF():
@@ -132,7 +130,6 @@ def download_HumanTF():
         urllib.request.urlretrieve('http://humantfs.ccbr.utoronto.ca/download/v_1.01/DatabaseExtract_v_1.01.csv', HuTF_file)
 
     print("    HuTF Downloaded")
-    pass
 
 
 ### CODES TO BUILD INDEX TABLE ###
