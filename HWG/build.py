@@ -10,7 +10,7 @@ import networkx as nx
 def load_data_path():
     filepath = os.path.dirname(os.path.abspath(__file__))
     # Go to base path of the repo and add Data/
-    data_path = os.path.join(filepath[:-4], "Data/")
+    data_path = os.path.join(filepath[:-4], "Data")
     return data_path
     
 ###This is another function I find in load_data_path.m. I feel like it might be used here(or maybe you want to put it somewhere else)
@@ -75,7 +75,7 @@ def download_string():
                 shutil.copyfileobj(f_in, f_out)
 
     print("    STRING Downloaded")
-download_string()
+# download_string()
 
 def download_huri():
     """This function should download the HuRI database to the computer.
@@ -141,20 +141,21 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
     data_path = load_data_path()
 
     # Read table
-    GRCh38_data_path = data_path + "Downloaded/Ensemble/GRCh38.p13.tsv"
+    GRCh38_data_path = os.path.join(data_path, "Downloaded/Ensemble/GRCh38.p13.tsv")
     GRCh = pd.read_csv(GRCh38_data_path, sep='\t')
-    biomart_custom_data_path = data_path + "Downloaded/Ensemble/biomart_stable_gene_protein_id_map.txt"
+    biomart_custom_data_path = os.path.join(data_path, "Downloaded/Ensemble/biomart_stable_gene_protein_id_map.txt")
     biomart_custom = pd.read_csv(biomart_custom_data_path, sep='\t')
-    STRING_ID_map_path = data_path + "Downloaded/STRING/string_9606_ENSG_ENSP_10_all_T.tsv"
-    STRING_IDs = pd.read_csv(STRING_ID_map_path, sep='\t')
+    STRING_ID_map_path = os.path.join(data_path, "Downloaded/STRING/string_9606_ENSG_ENSP_10_all_T.tsv")
+    STRING_IDs = pd.read_csv(STRING_ID_map_path, sep='\t', header=None)
+    STRING_IDs.columns = ['0', 'GENE ID', 'PROTEIN ID']
 
     # Extract stable IDs
-    gene_IDs_GRCh = GRCh['Gene_stable_ID'].str.strip()
-    protein_IDs_GRCh = GRCh['Protein_stable_ID'].str.strip()
-    gene_IDs_biomart = biomart_custom['Gene_stable_ID'].str.strip()
-    protein_IDs_biomart = biomart_custom['Protein_stable_ID'].str.strip()
-    gene_IDs_STRING = STRING_IDs['GENE_ID'].str.strip()
-    protein_IDs_STRING = STRING_IDs['PROTEIN_ID'].str.strip()
+    gene_IDs_GRCh = GRCh['Gene stable ID'].str.strip()
+    protein_IDs_GRCh = GRCh['Protein stable ID'].str.strip()
+    gene_IDs_biomart = biomart_custom['Gene stable ID'].str.strip()
+    protein_IDs_biomart = biomart_custom['Protein stable ID'].str.strip()
+    gene_IDs_STRING = STRING_IDs['GENE ID'].str.strip()
+    protein_IDs_STRING = STRING_IDs['PROTEIN ID'].str.strip()
 
     # Stack the lists of IDs from multiple sources
     protein_IDs = pd.concat([protein_IDs_STRING, protein_IDs_GRCh, protein_IDs_biomart]).reset_index(drop=True)
@@ -180,10 +181,15 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
     else:
         id_map = dict(zip(gene_IDs, protein_IDs))
 
+    #print(list(id_map.keys())[:5])
+    #print(list(id_map.values())[:5])
+    #print(len(list(id_map.keys())))
+    #print(len(list(id_map.values())))
     # Build newIDs
     newIDs = []
     unmapped = []
     for i, old_id in enumerate(oldIDs):
+        #print(old_id)
         new_id = id_map.get(old_id, "")
         newIDs.append(new_id)
         if new_id == "":
@@ -268,17 +274,17 @@ def buildIndexTable():
 ##extra function needed for buildAdjacencyMatrix()
 def list_HuRI():
     data_path = load_data_path()
-    HuRI_downloaded_data1 = f"{data_path}/Downloaded/HuRI/HuRI.tsv"
-    HuRI_downloaded_data2 = f"{data_path}/Downloaded/HuRI/Hi-union.tsv"
+    # HuRI_downloaded_data1 = os.path.join(data_path, "Downloaded/HuRI/HuRI.tsv")
+    HuRI_downloaded_data2 = os.path.join(data_path, "Downloaded/HuRI/HI-union.tsv")
 
     # Read the data
-    HuRI_PPI1 = pd.read_csv(HuRI_downloaded_data1, sep='\t')
-    HuRI_PPI2 = pd.read_csv(HuRI_downloaded_data2, sep='\t')
+    # HuRI_PPI1 = pd.read_csv(HuRI_downloaded_data1, sep='\t', header=None)
+    HuRI_PPI2 = pd.read_csv(HuRI_downloaded_data2, sep='\t', header=None)
 
     # Create the DataFrame
     A_list = pd.DataFrame({
-        'Protein 1': HuRI_PPI1['Protein_1'].astype(str),
-        'Protein 2': HuRI_PPI2['Protein_2'].astype(str)
+        'Gene 1': HuRI_PPI2[0].values, #.astype(str),
+        'Gene 2': HuRI_PPI2[1].values, #['Protein_2'].astype(str)
     })
 
     return A_list
@@ -314,8 +320,8 @@ def list_STRING(thresh, STRING_PPI=None):
     P2_confident = P2_confident.str[5:]
 
     # Map protein IDs to gene IDs
-    P1_gene_id, remove1 = stable_ID_map(P1_confident.tolist(), True)
-    P2_gene_id, remove2 = stable_ID_map(P2_confident.tolist(), True)
+    P1_gene_id, remove1 = stable_ID_map(P1_confident.tolist(), True, uni=False)
+    P2_gene_id, remove2 = stable_ID_map(P2_confident.tolist(), True, uni=False)
 
     # Remove rows that were unmapped
     remove_rows = np.unique(np.concatenate([remove1, remove2]))
@@ -330,8 +336,8 @@ def list_STRING(thresh, STRING_PPI=None):
 
     # Organize data as a DataFrame
     A_list = pd.DataFrame({
-        'Protein 1': P1_gene_id,
-        'Protein 2': P2_gene_id
+        'Gene 1': P1_gene_id,
+        'Gene 2': P2_gene_id
     })
 
     # Calculate total usage
@@ -341,7 +347,7 @@ def list_STRING(thresh, STRING_PPI=None):
     return A_list, STRING_PPI
 
 def list_combine(A_lists):
-    A_list = pd.DataFrame(columns=['Protein 1', 'Protein 2'])
+    A_list = pd.DataFrame(columns=['Gene 1', 'Gene 2'])
     
     # Stack the adjacency lists from each database
     for adj_list in A_lists:
@@ -357,8 +363,8 @@ def list2mat(A_list, indexTable):
     # Construct a matrix
     A = lil_matrix((n, n), dtype=int)
     for index, row in A_list.iterrows():
-        protein1 = row['Protein 1']
-        protein2 = row['Protein 2']
+        protein1 = row['Gene 1']
+        protein2 = row['Gene 2']
         if protein1 in gene_idxs and protein2 in gene_idxs:
             A[gene_idxs[protein1], gene_idxs[protein2]] = 1
 
