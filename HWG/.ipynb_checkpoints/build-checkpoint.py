@@ -6,11 +6,12 @@ from scipy.sparse import lil_matrix
 import pandas as pd
 import numpy as np
 import networkx as nx
+import scipy.io
 ### CODES TO DOWNLOAD DATA ###
 def load_data_path():
     filepath = os.path.dirname(os.path.abspath(__file__))
     # Go to base path of the repo and add Data/
-    data_path = os.path.join(filepath[:-4], "Data/")
+    data_path = os.path.join(filepath[:-4], "Data")
     return data_path
     
 ###This is another function I find in load_data_path.m. I feel like it might be used here(or maybe you want to put it somewhere else)
@@ -52,6 +53,9 @@ def download_data():
                 shutil.copyfileobj(f_in, f_out)
 
     print("    STRING Downloaded")
+
+    download_HumanTF()
+    download_HGNC()
 ##print("Current Working Directory:", os.getcwd())
 
 
@@ -75,7 +79,7 @@ def download_string():
                 shutil.copyfileobj(f_in, f_out)
 
     print("    STRING Downloaded")
-download_string()
+# download_string()
 
 def download_huri():
     """This function should download the HuRI database to the computer.
@@ -101,6 +105,7 @@ def download_huri():
         urllib.request.urlretrieve("http://www.interactome-atlas.org/data/HI-union.tsv", HI_union_file)
     
     print("    HuRI Downloaded")
+    
 
 
 def download_HGNC():
@@ -141,20 +146,21 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
     data_path = load_data_path()
 
     # Read table
-    GRCh38_data_path = data_path + "Downloaded/Ensemble/GRCh38.p13.tsv"
+    GRCh38_data_path = os.path.join(data_path, "Downloaded/Ensemble/GRCh38.p13.tsv")
     GRCh = pd.read_csv(GRCh38_data_path, sep='\t')
-    biomart_custom_data_path = data_path + "Downloaded/Ensemble/biomart_stable_gene_protein_id_map.txt"
+    biomart_custom_data_path = os.path.join(data_path, "Downloaded/Ensemble/biomart_stable_gene_protein_id_map.txt")
     biomart_custom = pd.read_csv(biomart_custom_data_path, sep='\t')
-    STRING_ID_map_path = data_path + "Downloaded/STRING/string_9606_ENSG_ENSP_10_all_T.tsv"
-    STRING_IDs = pd.read_csv(STRING_ID_map_path, sep='\t')
+    STRING_ID_map_path = os.path.join(data_path, "Downloaded/STRING/string_9606_ENSG_ENSP_10_all_T.tsv")
+    STRING_IDs = pd.read_csv(STRING_ID_map_path, sep='\t', header=None)
+    STRING_IDs.columns = ['0', 'GENE ID', 'PROTEIN ID']
 
     # Extract stable IDs
-    gene_IDs_GRCh = GRCh['Gene_stable_ID'].str.strip()
-    protein_IDs_GRCh = GRCh['Protein_stable_ID'].str.strip()
-    gene_IDs_biomart = biomart_custom['Gene_stable_ID'].str.strip()
-    protein_IDs_biomart = biomart_custom['Protein_stable_ID'].str.strip()
-    gene_IDs_STRING = STRING_IDs['GENE_ID'].str.strip()
-    protein_IDs_STRING = STRING_IDs['PROTEIN_ID'].str.strip()
+    gene_IDs_GRCh = GRCh['Gene stable ID'].str.strip()
+    protein_IDs_GRCh = GRCh['Protein stable ID'].str.strip()
+    gene_IDs_biomart = biomart_custom['Gene stable ID'].str.strip()
+    protein_IDs_biomart = biomart_custom['Protein stable ID'].str.strip()
+    gene_IDs_STRING = STRING_IDs['GENE ID'].str.strip()
+    protein_IDs_STRING = STRING_IDs['PROTEIN ID'].str.strip()
 
     # Stack the lists of IDs from multiple sources
     protein_IDs = pd.concat([protein_IDs_STRING, protein_IDs_GRCh, protein_IDs_biomart]).reset_index(drop=True)
@@ -180,10 +186,15 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
     else:
         id_map = dict(zip(gene_IDs, protein_IDs))
 
+    #print(list(id_map.keys())[:5])
+    #print(list(id_map.values())[:5])
+    #print(len(list(id_map.keys())))
+    #print(len(list(id_map.values())))
     # Build newIDs
     newIDs = []
     unmapped = []
     for i, old_id in enumerate(oldIDs):
+        #print(old_id)
         new_id = id_map.get(old_id, "")
         newIDs.append(new_id)
         if new_id == "":
@@ -211,11 +222,11 @@ def buildIndexTable():
     })
 
     # Add in Transcription Factors
-    HuTF_downloaded_data = data_path + "Downloaded/HuTF/HuTF_db.csv"
+    HuTF_downloaded_data =os.path.join(data_path,"Downloaded/HuTF/HuTF_db.csv")
     HuTF_db = pd.read_csv(HuTF_downloaded_data)
 
-    isTF = HuTF_db['IsTF_']
-    gene_stable_ids = HuTF_db['EnsemblID']
+    isTF = HuTF_db['Is TF?']
+    gene_stable_ids = HuTF_db['Ensembl ID']
 
     tf_ids = gene_stable_ids[isTF == "Yes"]
     for id in tf_ids:
@@ -227,62 +238,123 @@ def buildIndexTable():
 
     # Add in gene names where known
     # ENSEMBLE DATA
-    GRCh_downloaded_data = data_path + "Downloaded/Ensemble/GRCh38.p13.tsv"
+    GRCh_downloaded_data =os.path.join(data_path, "Downloaded/Ensemble/GRCh38.p13.tsv")
     GRCh_genes = pd.read_csv(GRCh_downloaded_data, sep='\t')
-    GRCh_genes['Gene_stable_ID'] = GRCh_genes['Gene_stable_ID'].str.strip()
-    GRCh_genes['Gene_name'] = GRCh_genes['Gene_name'].str.strip()
+    GRCh_genes['Gene stable ID'] = GRCh_genes['Gene stable ID'].str.strip()
+    GRCh_genes['Gene name'] = GRCh_genes['Gene name'].str.strip()
 
     # HGNC DATA
-    HGNC_downloaded_data = data_path + "Downloaded/HGNC/gene_lookup_dictionary.tsv"
+    HGNC_downloaded_data = os.path.join(data_path, "Downloaded/HGNC/gene_lookup_dictionary.tsv")
     HGNC_genes = pd.read_csv(HGNC_downloaded_data, sep='\t')
     HGNC_genes['ensembl_gene_id'] = HGNC_genes['ensembl_gene_id'].str.strip()
     HGNC_genes['symbol'] = HGNC_genes['symbol'].str.strip()
 
     # Combine ENSEMBLE and HGNC data
-    stable_IDs = pd.concat([GRCh_genes['Gene_stable_ID'], HGNC_genes['ensembl_gene_id']])
-    gene_names = pd.concat([GRCh_genes['Gene_name'], HGNC_genes['symbol']])
+    stable_IDs = pd.concat([GRCh_genes['Gene stable ID'], HGNC_genes['ensembl_gene_id']])
+    gene_names = pd.concat([GRCh_genes['Gene name'], HGNC_genes['symbol']])
 
+    stable_IDs = stable_IDs.astype(str)
+    gene_names = gene_names.astype(str)
+    # for id in pd.unique(stable_IDs):
+    #     idx = indexTable[indexTable['Stable ID'] == id].index
+    #     if not idx.empty:
+    #         indexTable.at[idx[0], 'Gene Name'] = gene_names[stable_IDs == id].values[0]
+    # id_to_name_mapping = pd.Series(gene_names.values, index=stable_IDs).to_dict()
+    id_to_name_mapping = {}
     for id in pd.unique(stable_IDs):
+        # Get the index of the current ID in indexTable
         idx = indexTable[indexTable['Stable ID'] == id].index
         if not idx.empty:
-            indexTable.at[idx[0], 'Gene Name'] = gene_names[stable_IDs == id].values[0]
-
+            # Get the gene name corresponding to the current ID
+            gene_name = gene_names[stable_IDs == id].values[0]
+            # Update the dictionary
+            id_to_name_mapping[id] = gene_name
     # Add in gene locations/positional information (using legacy "HWG nodes.mat")
     # This part assumes you have a Python equivalent of the .mat file loaded as `cur_tbl`
-    curtableId2idx = {id: i for i, id in enumerate(cur_tbl.index)}
-    gene_info = pd.DataFrame(columns=['Chromosome', 'Start', 'End'])
-    for id in indexTable['Stable ID']:
-        if id in curtableId2idx:
-            idx = curtableId2idx[id]
-            gene_info = gene_info.append({
-                'Chromosome': cur_tbl.loc[idx, 'Chromosome'],
-                'Start': cur_tbl.loc[idx, 'GeneStart'],
-                'End': cur_tbl.loc[idx, 'GeneEnd']
-            }, ignore_index=True)
-        else:
-            gene_info = gene_info.append({'Chromosome': 0, 'Start': 0, 'End': 0}, ignore_index=True)
+    # mat_data_path=os.path.join(data_path,"HWG nodes.mat")
+    # mat_data = scipy.io.loadmat(mat_data_path)
+    # cur_tbl = pd.DataFrame(mat_data['cur_tbl'])
 
-    indexTable = pd.concat([indexTable, gene_info], axis=1)
+    # curtable_id2idx = {str(cur_tbl.index[i]): i for i in range(len(cur_tbl))}
+    
+    # gene_info = pd.DataFrame(columns=['Chromosome', 'Start', 'End'])
+    # for i in range(len(index_table)):
+    #     stable_id = index_table.at[i, 'Stable ID']
+    #     if stable_id in curtable_id2idx:
+    #         idx = curtable_id2idx[stable_id]
+    #         chr = cur_tbl.at[idx, 'Chromosome']
+    #         start = cur_tbl.at[idx, 'GeneStart']
+    #         stop = cur_tbl.at[idx, 'GeneEnd']
+    #         gene_info = gene_info.append({'Chromosome': chr, 'Start': start, 'End': stop}, ignore_index=True)
+    #     else:
+    #         gene_info = gene_info.append({'Chromosome': 0, 'Start': 0, 'End': 0}, ignore_index=True)
+
+    # index_table = pd.concat([index_table, gene_info], axis=1)
+
+    # return index_table
+
+    indexTable['Gene Name'] = indexTable['Stable ID'].map(id_to_name_mapping).fillna('Unknown')
+
+    # Add in gene locations/positional information
+    mat_data_path = os.path.join(data_path, "HWG nodes.mat")
+    mat_data = scipy.io.loadmat(mat_data_path)
+
+    def extract_matlab_opaque(mat_obj):
+        result = {}
+        if isinstance(mat_obj, np.ndarray):
+            if mat_obj.dtype.names:
+                for name in mat_obj.dtype.names:
+                    result[name] = extract_matlab_opaque(mat_obj[name])
+            else:
+                result = mat_obj.tolist()
+        elif isinstance(mat_obj, scipy.io.matlab.mio5_params.mat_struct):
+            for field_name in mat_obj._fieldnames:
+                result[field_name] = extract_matlab_opaque(getattr(mat_obj, field_name))
+        else:
+            result = mat_obj
+        return result
+
+    extracted_data = extract_matlab_opaque(mat_data['None'])
+
+    # Assuming 'cur_tbl' data is extracted correctly
+    if 'cur_tbl' in extracted_data:
+        cur_tbl = extracted_data['cur_tbl']
+        cur_tbl_df = pd.DataFrame(cur_tbl)
+        
+        # Ensure correct column names (you may need to adjust based on actual data)
+        cur_tbl_df.columns = ['Chromosome', 'GeneStart', 'GeneEnd']
+
+        curtable_id2idx = {str(cur_tbl_df.index[i]): i for i in range(len(cur_tbl_df))}
+
+        gene_info = pd.DataFrame(columns=['Chromosome', 'Start', 'End'])
+        for i in range(len(indexTable)):
+            stable_id = indexTable.at[i, 'Stable ID']
+            if stable_id in curtable_id2idx:
+                idx = curtable_id2idx[stable_id]
+                chr = cur_tbl_df.at[idx, 'Chromosome']
+                start = cur_tbl_df.at[idx, 'GeneStart']
+                stop = cur_tbl_df.at[idx, 'GeneEnd']
+                gene_info = gene_info.append({'Chromosome': chr, 'Start': start, 'End': stop}, ignore_index=True)
+            else:
+                gene_info = gene_info.append({'Chromosome': 0, 'Start': 0, 'End': 0}, ignore_index=True)
+
+        indexTable = pd.concat([indexTable, gene_info], axis=1)
 
     return indexTable
+
 ##extra function needed for buildAdjacencyMatrix()
 def list_HuRI():
     data_path = load_data_path()
-    HuRI_downloaded_data1 = f"{data_path}/Downloaded/HuRI/HuRI.tsv"
-    HuRI_downloaded_data2 = f"{data_path}/Downloaded/HuRI/Hi-union.tsv"
+    HuRI_downloaded_data = os.path.join(data_path, "Downloaded/HuRI/HI-union.tsv")
 
-    # Read the data
-    HuRI_PPI1 = pd.read_csv(HuRI_downloaded_data1, sep='\t')
-    HuRI_PPI2 = pd.read_csv(HuRI_downloaded_data2, sep='\t')
+    HuRI_PPI = pd.read_csv(HuRI_downloaded_data, sep='\t', header=None)
 
     # Create the DataFrame
     A_list = pd.DataFrame({
-        'Protein 1': HuRI_PPI1['Protein_1'].astype(str),
-        'Protein 2': HuRI_PPI2['Protein_2'].astype(str)
+        'Gene 1': HuRI_PPI[0].values, #.astype(str),
+        'Gene 2': HuRI_PPI[1].values, #['Protein_2'].astype(str)
     })
-
     return A_list
-
 
 def list_STRING(thresh, STRING_PPI=None):
     print("Accessing STRING data")
@@ -314,8 +386,8 @@ def list_STRING(thresh, STRING_PPI=None):
     P2_confident = P2_confident.str[5:]
 
     # Map protein IDs to gene IDs
-    P1_gene_id, remove1 = stable_ID_map(P1_confident.tolist(), True)
-    P2_gene_id, remove2 = stable_ID_map(P2_confident.tolist(), True)
+    P1_gene_id, remove1 = stable_ID_map(P1_confident.tolist(), True, uni=False)
+    P2_gene_id, remove2 = stable_ID_map(P2_confident.tolist(), True, uni=False)
 
     # Remove rows that were unmapped
     remove_rows = np.unique(np.concatenate([remove1, remove2]))
@@ -330,18 +402,18 @@ def list_STRING(thresh, STRING_PPI=None):
 
     # Organize data as a DataFrame
     A_list = pd.DataFrame({
-        'Protein 1': P1_gene_id,
-        'Protein 2': P2_gene_id
+        'Gene 1': P1_gene_id,
+        'Gene 2': P2_gene_id
     })
 
     # Calculate total usage
     rem = len(P1_gene_id) / len(STRING_PPI)
     print(f"STRING Data Access Complete: {rem * 100:.2f}% of the data was used.")
-
     return A_list, STRING_PPI
 
+
 def list_combine(A_lists):
-    A_list = pd.DataFrame(columns=['Protein 1', 'Protein 2'])
+    A_list = pd.DataFrame(columns=['Gene 1', 'Gene 2'])
     
     # Stack the adjacency lists from each database
     for adj_list in A_lists:
@@ -357,8 +429,8 @@ def list2mat(A_list, indexTable):
     # Construct a matrix
     A = lil_matrix((n, n), dtype=int)
     for index, row in A_list.iterrows():
-        protein1 = row['Protein 1']
-        protein2 = row['Protein 2']
+        protein1 = row['Gene 1']
+        protein2 = row['Gene 2']
         if protein1 in gene_idxs and protein2 in gene_idxs:
             A[gene_idxs[protein1], gene_idxs[protein2]] = 1
 
@@ -397,7 +469,7 @@ def HWGMatrixDecomp(A_HWG, A_IndexTable):
     return B_HWG, C_HWG, C_IndexTable
 
 ### CODES TO BUILD HARDWIRED GENOME A MATRIX ###
-def buildAdjacencyMatrix():
+def buildAdjacencyMatrix(indexTable):
     """This function assembles the STRING and HuRI downloaded data into an adjacency matrix.
     See: https://github.com/Jpickard1/HardwiredGenome/blob/master/Code/data_handling/build/buildHWGobj.m
     """

@@ -53,6 +53,9 @@ def download_data():
                 shutil.copyfileobj(f_in, f_out)
 
     print("    STRING Downloaded")
+
+    download_HumanTF()
+    download_HGNC()
 ##print("Current Working Directory:", os.getcwd())
 
 
