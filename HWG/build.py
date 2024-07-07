@@ -7,6 +7,72 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import scipy.io
+import pickle
+
+
+def buildHWG(thresh=600):
+    print('****************')
+    print('Downloading Data')
+    print('****************')
+    download_data()
+    print('********************')
+    print('Building Index Table')
+    print('********************')
+    indexTable = buildIndexTable()
+    print('********************')
+    print('Building Adj. Matrix')
+    print('********************')
+    HWG = buildAdjacencyMatrix(indexTable)
+    print('********************')
+    print('   save to a file   ')
+    print('********************')
+    path = load_data_path()
+    fileName = 'HWG_' + str(thresh) + '.pkl'
+    path = load_data_path()
+    path = os.path.join(path, 'Processed', fileName)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    print(f'path={path}')
+    with open(path, 'wb') as f:
+        pickle.dump(HWG, f)
+    return HWG
+
+def loadHWG(thresh=600):
+    fileName = f'HWG_{thresh}.pkl'
+    path = load_data_path()
+    path = os.path.join(path, 'Processed', fileName)
+    
+    if os.path.exists(path):
+        print(f'Loading HWG for threshold {thresh}...')
+        with open(path, 'rb') as f:
+            HWG = pickle.load(f)
+        print('HWG loaded successfully.')
+        return HWG
+    else:
+        print(f'HWG for threshold {thresh} does not exist.')
+
+        while True:
+            user_input = input('Do you want to build HWG with this threshold? (yes/no): ').strip().lower()
+            if user_input == 'yes':
+                return buildHWG(thresh)
+            elif user_input == 'no':
+                new_thresh = int(input('Enter a new threshold: '))
+                new_fileName = f'HWG_{new_thresh}.pkl'
+                new_path = os.path.join(load_data_path(), 'Processed', new_fileName)
+                if os.path.exists(new_path):
+                    print(f'Loading HWG for threshold {new_thresh}...')
+                    with open(new_path, 'rb') as f:
+                        HWG = pickle.load(f)
+                    print('HWG loaded successfully.')
+                    return HWG
+                else:
+                    return buildHWG(new_thresh)
+            else:
+                print('Invalid input. Please enter "yes" or "no".')
+
+
+
+    
+
 ### CODES TO DOWNLOAD DATA ###
 def load_data_path():
     filepath = os.path.dirname(os.path.abspath(__file__))
@@ -55,8 +121,10 @@ def download_data():
     print("    STRING Downloaded")
 
     download_HumanTF()
+    print("    HumanTF Downloaded")
+
     download_HGNC()
-##print("Current Working Directory:", os.getcwd())
+    print("    HGNC Downloaded")
 
 
 ## after running download_data(), the data is downloaded outside of current local address.I mean, it is supposed to downloaded into D:/HardwiredGenome-Python/HWG,right? but now it is placed at D:/HardwiredGenome-(or it is what it is supposed to be, I am not familiar with how matlab code work, or it is just a problme caused by name?like how it deal with "-")
@@ -122,8 +190,6 @@ def download_HGNC():
     if not os.path.isfile(HGNC_file):
         urllib.request.urlretrieve('http://ftp.ebi.ac.uk/pub/databases/genenames/hgnc/tsv/hgnc_complete_set.txt', HGNC_file)
 
-    print("    HGNC Downloaded")
-
 
 def download_HumanTF():
     """This function should download the Human Transcription Factors database to the computer.
@@ -137,8 +203,6 @@ def download_HumanTF():
     HuTF_file = os.path.join(HuTF_path, "HuTF_db.csv")
     if not os.path.isfile(HuTF_file):
         urllib.request.urlretrieve('http://humantfs.ccbr.utoronto.ca/download/v_1.01/DatabaseExtract_v_1.01.csv', HuTF_file)
-
-    print("    HuTF Downloaded")
 
 ### extra function needed for buildIndexTable()
 def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from stable_ID_map.m
@@ -186,10 +250,6 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
     else:
         id_map = dict(zip(gene_IDs, protein_IDs))
 
-    #print(list(id_map.keys())[:5])
-    #print(list(id_map.values())[:5])
-    #print(len(list(id_map.keys())))
-    #print(len(list(id_map.values())))
     # Build newIDs
     newIDs = []
     unmapped = []
@@ -201,33 +261,31 @@ def stable_ID_map(oldIDs, to_gene, uni):##extra needed function, converted from 
             unmapped.append(i)
 
     return newIDs, unmapped
+
+
 ### CODES TO BUILD INDEX TABLE ###
-
-
 def buildIndexTable():
     """This function should build an index table to map each entry of the A matrix to gene names.
     See: https://github.com/Jpickard1/HardwiredGenome/blob/master/Code/data_handling/build/buildIndexTable.m
     """
+    # Path to find downloaded data
     data_path = load_data_path()
-
-    # Get unique genes
+    
+    # Get unique genes used in the HWG
     gene_ids, _ = stable_ID_map(0, 0, True)
     gene_ids = pd.unique(gene_ids)
-
+    
     # Create index table
     indexTable = pd.DataFrame({
         'Stable ID': gene_ids,
-        'Gene Name': [None] * len(gene_ids),
         'Transcription Factor': [False] * len(gene_ids)
     })
-
-    # Add in Transcription Factors
+    
+    # Fill in transcription factors
     HuTF_downloaded_data =os.path.join(data_path,"Downloaded/HuTF/HuTF_db.csv")
     HuTF_db = pd.read_csv(HuTF_downloaded_data)
-
     isTF = HuTF_db['Is TF?']
     gene_stable_ids = HuTF_db['Ensembl ID']
-
     tf_ids = gene_stable_ids[isTF == "Yes"]
     for id in tf_ids:
         idx = indexTable[indexTable['Stable ID'] == id].index
@@ -235,110 +293,43 @@ def buildIndexTable():
             print(f"    Missing TF: {id}")
         else:
             indexTable.loc[idx, 'Transcription Factor'] = True
-
+            
     # Add in gene names where known
     # ENSEMBLE DATA
     GRCh_downloaded_data =os.path.join(data_path, "Downloaded/Ensemble/GRCh38.p13.tsv")
     GRCh_genes = pd.read_csv(GRCh_downloaded_data, sep='\t')
     GRCh_genes['Gene stable ID'] = GRCh_genes['Gene stable ID'].str.strip()
     GRCh_genes['Gene name'] = GRCh_genes['Gene name'].str.strip()
-
+    
     # HGNC DATA
     HGNC_downloaded_data = os.path.join(data_path, "Downloaded/HGNC/gene_lookup_dictionary.tsv")
     HGNC_genes = pd.read_csv(HGNC_downloaded_data, sep='\t')
     HGNC_genes['ensembl_gene_id'] = HGNC_genes['ensembl_gene_id'].str.strip()
     HGNC_genes['symbol'] = HGNC_genes['symbol'].str.strip()
-
-    # Combine ENSEMBLE and HGNC data
-    stable_IDs = pd.concat([GRCh_genes['Gene stable ID'], HGNC_genes['ensembl_gene_id']])
-    gene_names = pd.concat([GRCh_genes['Gene name'], HGNC_genes['symbol']])
-
-    stable_IDs = stable_IDs.astype(str)
-    gene_names = gene_names.astype(str)
-    # for id in pd.unique(stable_IDs):
-    #     idx = indexTable[indexTable['Stable ID'] == id].index
-    #     if not idx.empty:
-    #         indexTable.at[idx[0], 'Gene Name'] = gene_names[stable_IDs == id].values[0]
-    # id_to_name_mapping = pd.Series(gene_names.values, index=stable_IDs).to_dict()
-    id_to_name_mapping = {}
-    for id in pd.unique(stable_IDs):
-        # Get the index of the current ID in indexTable
-        idx = indexTable[indexTable['Stable ID'] == id].index
-        if not idx.empty:
-            # Get the gene name corresponding to the current ID
-            gene_name = gene_names[stable_IDs == id].values[0]
-            # Update the dictionary
-            id_to_name_mapping[id] = gene_name
-    # Add in gene locations/positional information (using legacy "HWG nodes.mat")
-    # This part assumes you have a Python equivalent of the .mat file loaded as `cur_tbl`
-    # mat_data_path=os.path.join(data_path,"HWG nodes.mat")
-    # mat_data = scipy.io.loadmat(mat_data_path)
-    # cur_tbl = pd.DataFrame(mat_data['cur_tbl'])
-
-    # curtable_id2idx = {str(cur_tbl.index[i]): i for i in range(len(cur_tbl))}
     
-    # gene_info = pd.DataFrame(columns=['Chromosome', 'Start', 'End'])
-    # for i in range(len(index_table)):
-    #     stable_id = index_table.at[i, 'Stable ID']
-    #     if stable_id in curtable_id2idx:
-    #         idx = curtable_id2idx[stable_id]
-    #         chr = cur_tbl.at[idx, 'Chromosome']
-    #         start = cur_tbl.at[idx, 'GeneStart']
-    #         stop = cur_tbl.at[idx, 'GeneEnd']
-    #         gene_info = gene_info.append({'Chromosome': chr, 'Start': start, 'End': stop}, ignore_index=True)
-    #     else:
-    #         gene_info = gene_info.append({'Chromosome': 0, 'Start': 0, 'End': 0}, ignore_index=True)
-
-    # index_table = pd.concat([index_table, gene_info], axis=1)
-
-    # return index_table
-
-    indexTable['Gene Name'] = indexTable['Stable ID'].map(id_to_name_mapping).fillna('Unknown')
-
-    # Add in gene locations/positional information
-    mat_data_path = os.path.join(data_path, "HWG nodes.mat")
-    mat_data = scipy.io.loadmat(mat_data_path)
-
-    def extract_matlab_opaque(mat_obj):
-        result = {}
-        if isinstance(mat_obj, np.ndarray):
-            if mat_obj.dtype.names:
-                for name in mat_obj.dtype.names:
-                    result[name] = extract_matlab_opaque(mat_obj[name])
-            else:
-                result = mat_obj.tolist()
-        elif isinstance(mat_obj, scipy.io.matlab.mio5_params.mat_struct):
-            for field_name in mat_obj._fieldnames:
-                result[field_name] = extract_matlab_opaque(getattr(mat_obj, field_name))
-        else:
-            result = mat_obj
-        return result
-
-    extracted_data = extract_matlab_opaque(mat_data['None'])
-
-    # Assuming 'cur_tbl' data is extracted correctly
-    if 'cur_tbl' in extracted_data:
-        cur_tbl = extracted_data['cur_tbl']
-        cur_tbl_df = pd.DataFrame(cur_tbl)
-        
-        # Ensure correct column names (you may need to adjust based on actual data)
-        cur_tbl_df.columns = ['Chromosome', 'GeneStart', 'GeneEnd']
-
-        curtable_id2idx = {str(cur_tbl_df.index[i]): i for i in range(len(cur_tbl_df))}
-
-        gene_info = pd.DataFrame(columns=['Chromosome', 'Start', 'End'])
-        for i in range(len(indexTable)):
-            stable_id = indexTable.at[i, 'Stable ID']
-            if stable_id in curtable_id2idx:
-                idx = curtable_id2idx[stable_id]
-                chr = cur_tbl_df.at[idx, 'Chromosome']
-                start = cur_tbl_df.at[idx, 'GeneStart']
-                stop = cur_tbl_df.at[idx, 'GeneEnd']
-                gene_info = gene_info.append({'Chromosome': chr, 'Start': start, 'End': stop}, ignore_index=True)
-            else:
-                gene_info = gene_info.append({'Chromosome': 0, 'Start': 0, 'End': 0}, ignore_index=True)
-
-        indexTable = pd.concat([indexTable, gene_info], axis=1)
+    # Merge in GRCH
+    indexTable = pd.merge(indexTable, GRCh_genes, how='left',
+                   left_on='Stable ID',
+                   right_on='Gene stable ID',
+                  )
+    indexTable = indexTable[indexTable['Stable ID'].notna()]
+    indexTable = indexTable.drop_duplicates(subset=['Stable ID'], keep='first')
+    indexTable = indexTable.reset_index()
+    indexTable = indexTable.drop('index', axis=1)
+    
+    # Merge in HGNC
+    indexTable = pd.merge(indexTable, HGNC_genes, how='left',
+                   left_on='Stable ID',
+                   right_on='ensembl_gene_id',
+                  )
+    indexTable = indexTable[indexTable['Stable ID'].notna()]
+    indexTable = indexTable.drop_duplicates(subset=['Stable ID'], keep='first')
+    indexTable = indexTable.reset_index()
+    indexTable = indexTable.drop('index', axis=1)
+    
+    # Reduce the table
+    columns2keep = ['Stable ID', 'symbol', 'Transcription Factor', 'Gene start (bp)', 'Gene end (bp)', 'Chromosome/scaffold name', 'Protein stable ID']
+    indexTable = indexTable[columns2keep]
 
     return indexTable
 
@@ -410,7 +401,6 @@ def list_STRING(thresh, STRING_PPI=None):
     rem = len(P1_gene_id) / len(STRING_PPI)
     print(f"STRING Data Access Complete: {rem * 100:.2f}% of the data was used.")
     return A_list, STRING_PPI
-
 
 def list_combine(A_lists):
     A_list = pd.DataFrame(columns=['Gene 1', 'Gene 2'])
@@ -489,20 +479,19 @@ def buildAdjacencyMatrix(indexTable):
     A_HWG = list2mat(A_list, indexTable)
 
     # Reduce the matrix and list to only contain used genes
-    A_HWG, A_IndexTable = reduceHWG(A_HWG, indexTable)
+    # A_HWG, A_IndexTable = reduceHWG(A_HWG, indexTable)
 
     # Construct the factor matrices
-    B_HWG, C_HWG, C_IndexTable = HWGMatrixDecomp(A_HWG, A_IndexTable)
+    # B_HWG, C_HWG, C_IndexTable = HWGMatrixDecomp(A_HWG, A_IndexTable)
 
     # Package as the Hardwired Genome object
     HWG = {
         'thresh': thresh,
         'A': A_HWG,
-        'B': B_HWG,
-        'C': C_HWG,
-        'geneIndexTable': A_IndexTable,
-        'TFIndexTable': C_IndexTable
+        # 'B': B_HWG,
+        # 'C': C_HWG,
+        'geneIndexTable': indexTable,
+        # 'TFIndexTable': C_IndexTable
     }
 
     return HWG
-    pass
