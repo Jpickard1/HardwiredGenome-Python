@@ -22,7 +22,7 @@ def buildHWG(thresh=600):
     print('********************')
     print('Building Adj. Matrix')
     print('********************')
-    HWG = buildAdjacencyMatrix(indexTable)
+    HWG = buildAdjacencyMatrix(indexTable, thresh=thresh)
     print('********************')
     print('   save to a file   ')
     print('********************')
@@ -188,7 +188,7 @@ def download_HGNC():
     # Define the file path
     HGNC_file = os.path.join(HGNC_path, "gene_lookup_dictionary.tsv")
     if not os.path.isfile(HGNC_file):
-        urllib.request.urlretrieve('http://ftp.ebi.ac.uk/pub/databases/genenames/hgnc/tsv/hgnc_complete_set.txt', HGNC_file)
+        urllib.request.urlretrieve('https://storage.googleapis.com/public-download-files/hgnc/tsv/tsv/hgnc_complete_set.txt', HGNC_file)
 
 
 def download_HumanTF():
@@ -459,11 +459,10 @@ def HWGMatrixDecomp(A_HWG, A_IndexTable):
     return B_HWG, C_HWG, C_IndexTable
 
 ### CODES TO BUILD HARDWIRED GENOME A MATRIX ###
-def buildAdjacencyMatrix(indexTable):
+def buildAdjacencyMatrix(indexTable, thresh = 600):
     """This function assembles the STRING and HuRI downloaded data into an adjacency matrix.
     See: https://github.com/Jpickard1/HardwiredGenome/blob/master/Code/data_handling/build/buildHWGobj.m
     """
-    thresh = 600
 
     # Get adjacency lists
     A_list_HuRI = list_HuRI()
@@ -488,10 +487,7 @@ def buildAdjacencyMatrix(indexTable):
     HWG = {
         'thresh': thresh,
         'A': A_HWG,
-        # 'B': B_HWG,
-        # 'C': C_HWG,
         'geneIndexTable': indexTable,
-        # 'TFIndexTable': C_IndexTable
     }
 
     return HWG
