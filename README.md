@@ -30,4 +30,4 @@ HWG = loadHWG(thresh=thresh)
 You can also save the HWG object in other formats however you like.
 
 
-Joshua Pickard and Yuchen Shao wrote this code in the summer of 2022.
+Joshua Pickard and Yuchen Shao wrote this code in the summer of 2024.
